@@ -8,6 +8,7 @@ const start = async () => {
   await initDb();
   await connectRabbitMQ();
   await consumeMessages("race-events");
+  await consumeMessages("application-events");
 
   app.listen(PORT, () => {
     console.log(`Query service listening on port ${PORT}`);

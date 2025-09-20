@@ -5,13 +5,14 @@ import {
   validateRaceCreate,
   validateRaceUpdate,
 } from "./helpers/validators.js";
+import { auth, Authed, requireRole } from "./auth.js";
 
 const app = express();
 app.use(express.json());
+app.use(auth);
 
-const validDistances = ["5k", "10k", "HalfMarathon", "Marathon"];
-
-app.post("/races", async (req, res) => {
+//races endpoints
+app.post("/races", requireRole("Administrator"), async (req, res) => {
   const { name, distance } = req.body;
 
   const error = validateRaceCreate(name, distance);
@@ -26,12 +27,15 @@ app.post("/races", async (req, res) => {
     distance,
   };
 
-  await publishMessage("race-events", { type: "RaceCreated", payload: race });
+  const result = await publishMessage("race-events", {
+    type: "RaceCreated",
+    payload: race,
+  });
 
-  res.status(201).json(race);
+  res.status(result.status).json({ message: result.message, race });
 });
 
-app.patch("/races/:id", async (req, res) => {
+app.patch("/races/:id", requireRole("Administrator"), async (req, res) => {
   const { id } = req.params;
   const { name, distance } = req.body;
 
@@ -43,20 +47,68 @@ app.patch("/races/:id", async (req, res) => {
 
   const update = { id, ...(name && { name }), ...(distance && { distance }) };
 
-  await publishMessage("race-events", { type: "RaceUpdated", payload: update });
+  const result = await publishMessage("race-events", {
+    type: "RaceUpdated",
+    payload: update,
+  });
 
-  res.json({ status: "update event sent", race: update });
+  res.status(result.status).json({ message: result.message, race: update });
 });
 
-app.delete("/races/:id", async (req, res) => {
+app.delete("/races/:id", requireRole("Administrator"), async (req, res) => {
   const { id } = req.params;
 
-  await publishMessage("race-events", {
+  const result = await publishMessage("race-events", {
     type: "RaceDeleted",
     payload: { id },
   });
 
-  res.json({ status: "delete event sent", id });
+  res.status(result.status).json({ message: result.message, id });
 });
+
+//application endpoints
+app.post(
+  "/applications",
+  requireRole("Applicant"),
+  async (req: Authed, res) => {
+    const { firstName, lastName, club, raceId } = req.body;
+
+    if (!firstName || !lastName || !raceId) {
+      return res
+        .status(400)
+        .json({ error: "firstName, lastName and raceId are required" });
+    }
+
+    const application = {
+      id: randomUUID(),
+      firstName,
+      lastName,
+      club: club || null,
+      raceId,
+      userId: req.user!.sub,
+    };
+
+    const result = await publishMessage("application-events", {
+      type: "ApplicationCreated",
+      payload: application,
+    });
+
+    res.status(result.status).json({ message: result.message, application });
+  }
+);
+app.delete(
+  "/applications/:id",
+  requireRole("Applicant"),
+  async (req: Authed, res) => {
+    const { id } = req.params;
+
+    const result = await publishMessage("application-events", {
+      type: "ApplicationDeleted",
+      payload: { id, userId: req.user!.sub },
+    });
+
+    res.status(result.status).json({ message: result.message, id });
+  }
+);
 
 export default app;
