@@ -21,6 +21,8 @@ export async function publishMessage(
   const correlationId = randomUUID();
 
   return new Promise((resolve) => {
+    const consumerTag = `ctag-${correlationId}`;
+
     channel.consume(
       "operation-results",
       (msg) => {
@@ -28,9 +30,12 @@ export async function publishMessage(
         if (msg.properties.correlationId === correlationId) {
           const result = JSON.parse(msg.content.toString());
           resolve(result);
+
+          // clean up this consumer after resolving
+          channel.cancel(consumerTag).catch(console.error);
         }
       },
-      { noAck: true }
+      { noAck: true, consumerTag }
     );
 
     channel.sendToQueue(queue, Buffer.from(JSON.stringify(message)), {

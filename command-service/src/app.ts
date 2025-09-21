@@ -1,5 +1,6 @@
 import express from "express";
 import { publishMessage } from "./rabbitmq.js";
+import cors from "cors";
 import { randomUUID } from "crypto";
 import {
   validateRaceCreate,
@@ -9,6 +10,7 @@ import { auth, Authed, requireRole } from "./auth.js";
 
 const app = express();
 app.use(express.json());
+app.use(cors());
 app.use(auth);
 
 //races endpoints
